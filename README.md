@@ -80,7 +80,7 @@ Each run writes a directory of live project metadata. Treat it as confidential. 
 
 This repo gitignores `/gcp-audit-*/` at the repo root (the default output path). If you pass `--out`, keep that directory outside the working tree.
 
-VPN shared secrets and service-account private-key material are replaced with `[REDACTED]` before write. Secret payloads (`access secret versions`) are not requested.
+VPN shared secrets, service-account private-key material, and API key strings (`keyString`) are replaced with `[REDACTED]` before write. Secret payloads (`access secret versions`) are not requested.
 
 ## Locations
 
@@ -109,6 +109,12 @@ gcp-audit-<project>-<UTC-timestamp>/
 - GKE legacy ABAC and non-private nodes
 - User-managed service account keys
 - Missing Cloud Logging sinks
+- Public Cloud Storage buckets and buckets without public access prevention
+- `allUsers`, `allAuthenticatedUsers`, or `roles/iam.serviceAccountTokenCreator` on Cloud Run, Functions, Artifact Registry, Secret Manager, Pub/Sub, Cloud KMS, and service accounts
+- Cloud KMS keys with no rotation period, or a primary version scheduled for destruction
+- Organization policies that do not enforce the checked constraints
+- API keys with no application or API restrictions
+- Workload Identity providers with no attribute condition
 
 ## Build and test
 

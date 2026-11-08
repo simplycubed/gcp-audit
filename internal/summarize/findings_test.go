@@ -110,3 +110,112 @@ func TestFindingOnlyChecks(t *testing.T) {
 		t.Fatalf("audit-only sink was treated as an exclusion:\n%s", md)
 	}
 }
+
+func TestNewCollectionFindings(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		t.Helper()
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("global/storage/buckets/public.json", `{
+		"name":"public","iamConfiguration":{"publicAccessPrevention":"inherited"}
+	}`)
+	write("global/storage/buckets/public-iam.json", `{
+		"bindings":[{"role":"roles/storage.objectViewer","members":["allUsers"]}]
+	}`)
+	write("global/storage/buckets/locked.json", `{
+		"name":"locked","iamConfiguration":{"publicAccessPrevention":"enforced"}
+	}`)
+	write("global/storage/buckets/locked-iam.json", `{
+		"bindings":[{"role":"roles/storage.objectViewer","members":["projectViewer:example"]}]
+	}`)
+	write("global/storage/buckets/missing.json", `{}`)
+	write("locations/europe-west1/run/api-iam.json", `{
+		"bindings":[{"role":"roles/iam.serviceAccountTokenCreator","members":["allAuthenticatedUsers"]}]
+	}`)
+	write("locations/europe-west1/functions/empty-iam.json", `{}`)
+	write("locations/europe-west1/kms/app-iam.json", `{
+		"bindings":[{"role":"roles/cloudkms.viewer","members":["user:a@example.com"]}]
+	}`)
+	write("locations/europe-west1/kms/key-rings/app/keys.json", `{
+		"cryptoKeys":[
+			{"name":"","rotationPeriod":""},
+			{"name":"projects/p/locations/europe-west1/keyRings/app/cryptoKeys/data","rotationPeriod":"","primary":{"state":"ENABLED"}},
+			{"name":"projects/p/locations/europe-west1/keyRings/app/cryptoKeys/old","rotationPeriod":"7776000s","primary":{"state":"DESTROY_SCHEDULED"}}
+		]
+	}`)
+	write("locations/europe-west1/kms/key-rings/app/old-iam.json", `{
+		"bindings":[{"role":"roles/iam.serviceAccountTokenCreator","members":["serviceAccount:a@example.com"]}]
+	}`)
+	write("global/orgpolicy/storage.publicAccessPrevention.json", `{"spec":{"rules":[{"enforce":true}]}}`)
+	write("global/orgpolicy/sql.restrictPublicIp.json", `{"spec":{"rules":[{"enforce":false}]}}`)
+	write("global/orgpolicy/iam.disableServiceAccountKeyCreation.json", `{}`)
+	write("global/orgpolicy/compute.vmExternalIpAccess.json", `{"spec":{"rules":[{"denyAll":true}]}}`)
+	write("global/apikeys/keys.json", `{
+		"keys":[
+			{"name":"","keyString":"AIzaEmptyName"},
+			{"name":"projects/p/locations/global/keys/open","keyString":"AIzaShouldNotAppear","restrictions":{}},
+			{"name":"projects/p/locations/global/keys/web","restrictions":{"browserKeyRestrictions":{"allowedReferrers":["https://example.com/*"]}}},
+			{"name":"projects/p/locations/global/keys/api","restrictions":{"apiTargets":[{"service":"storage.googleapis.com"}]}}
+		]
+	}`)
+	write("global/iam/workload-identity-pools/gha-providers.json", `{
+		"workloadIdentityPoolProviders":[
+			{"name":"","attributeCondition":""},
+			{"name":"projects/p/locations/global/workloadIdentityPools/gha/providers/open","attributeCondition":""},
+			{"name":"projects/p/locations/global/workloadIdentityPools/gha/providers/locked","attributeCondition":"assertion.repository=='acme/app'"}
+		]
+	}`)
+
+	rep, err := Build(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	md := rep.Markdown()
+	needles := []string{
+		"Cloud Storage bucket is public",
+		"Cloud Storage public access prevention is not enforced",
+		"Cloud Run service is public",
+		"Cloud Run service grants service account token creator",
+		"Cloud KMS key grants service account token creator",
+		"Cloud KMS key has no rotation period",
+		"Cloud KMS key is scheduled for destruction",
+		"Organization policy does not enforce sql.restrictPublicIp",
+		"API key has no application or API restrictions",
+		"Workload Identity provider has no attribute condition",
+	}
+	for _, n := range needles {
+		if !strings.Contains(md, n) {
+			t.Errorf("missing %q\n%s", n, md)
+		}
+	}
+	absent := []string{
+		"AIzaShouldNotAppear",
+		"AIzaEmptyName",
+		"Organization policy does not enforce storage.publicAccessPrevention",
+		"Organization policy does not enforce iam.disableServiceAccountKeyCreation",
+		"Organization policy does not enforce compute.vmExternalIpAccess",
+		"projects/p/locations/global/keys/web",
+		"projects/p/locations/global/keys/api",
+		"providers/locked",
+		"`locked`",
+		"Cloud KMS key ring is public",
+	}
+	for _, n := range absent {
+		if strings.Contains(md, n) {
+			t.Errorf("unexpected %q\n%s", n, md)
+		}
+	}
+	if strings.Count(md, "Cloud Storage public access prevention is not enforced") != 1 {
+		t.Fatalf("enforced bucket was flagged:\n%s", md)
+	}
+	if strings.Count(md, "Workload Identity provider has no attribute condition") != 1 {
+		t.Fatalf("conditioned provider was flagged:\n%s", md)
+	}
+}
