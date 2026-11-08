@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charlesgreen/gcp-audit/internal/summarize"
+	"github.com/simplycubed/gcp-audit/internal/summarize"
 )
 
 // Set by GoReleaser ldflags.

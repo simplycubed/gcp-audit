@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charlesgreen/gcp-audit/internal/report"
+	"github.com/simplycubed/gcp-audit/internal/report"
 )
 
 // Build reads a gcp-audit dump directory and returns a portable report.

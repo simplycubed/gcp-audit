@@ -2,22 +2,22 @@
 
 Read-only CLI that snapshots a Google Cloud project and writes findings as markdown, CSV, and JSON. Use it for monthly security reviews and as evidence toward ISO 27001 and SOC 2 technical controls.
 
-Sibling of [aws-audit](https://github.com/charlesgreen/aws-audit): same dump hygiene and report idea, separate collector, no shared cloud SDK. Implemented in Go with Google APIs.
+Sibling of [aws-audit](https://github.com/simplycubed/aws-audit): same dump hygiene and report idea, separate collector, no shared cloud SDK. Implemented in Go with Google APIs.
 
 ## Install
 
-From a [GitHub Release](https://github.com/charlesgreen/gcp-audit/releases) (Linux amd64; replace the version):
+From a [GitHub Release](https://github.com/simplycubed/gcp-audit/releases) (Linux amd64; replace the version):
 
 ```bash
-curl -L https://github.com/charlesgreen/gcp-audit/releases/download/v0.1.0/gcp-audit_0.1.0_Linux_x86_64.tar.gz | tar xz
+curl -L https://github.com/simplycubed/gcp-audit/releases/download/v0.1.0/gcp-audit_0.1.0_Linux_x86_64.tar.gz | tar xz
 sudo mv gcp-audit gcp-audit-summarize /usr/local/bin/
 ```
 
 From source:
 
 ```bash
-go install github.com/charlesgreen/gcp-audit/cmd/gcp-audit@latest
-go install github.com/charlesgreen/gcp-audit/cmd/gcp-audit-summarize@latest
+go install github.com/simplycubed/gcp-audit/cmd/gcp-audit@latest
+go install github.com/simplycubed/gcp-audit/cmd/gcp-audit-summarize@latest
 ```
 
 A `v*` tag on `main` runs [GoReleaser](https://goreleaser.com) and publishes archives, checksums, and SBOMs.

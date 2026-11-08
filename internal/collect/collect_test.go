@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesgreen/gcp-audit/internal/gcpapi"
+	"github.com/simplycubed/gcp-audit/internal/gcpapi"
 )
 
 func testOpts(t *testing.T, fake *gcpapi.Fake) Options {

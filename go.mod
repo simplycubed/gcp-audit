@@ -1,4 +1,4 @@
-module github.com/charlesgreen/gcp-audit
+module github.com/simplycubed/gcp-audit
 
 go 1.26.0
 

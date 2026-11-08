@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charlesgreen/gcp-audit/internal/collect"
-	"github.com/charlesgreen/gcp-audit/internal/gcpapi"
-	"github.com/charlesgreen/gcp-audit/internal/locations"
+	"github.com/simplycubed/gcp-audit/internal/collect"
+	"github.com/simplycubed/gcp-audit/internal/gcpapi"
+	"github.com/simplycubed/gcp-audit/internal/locations"
 )
 
 // Set by GoReleaser ldflags.

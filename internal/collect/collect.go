@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charlesgreen/gcp-audit/internal/gcpapi"
-	"github.com/charlesgreen/gcp-audit/internal/locations"
-	"github.com/charlesgreen/gcp-audit/internal/redact"
-	"github.com/charlesgreen/gcp-audit/internal/report"
-	"github.com/charlesgreen/gcp-audit/internal/summarize"
+	"github.com/simplycubed/gcp-audit/internal/gcpapi"
+	"github.com/simplycubed/gcp-audit/internal/locations"
+	"github.com/simplycubed/gcp-audit/internal/redact"
+	"github.com/simplycubed/gcp-audit/internal/report"
+	"github.com/simplycubed/gcp-audit/internal/summarize"
 )
 
 const Version = "gcp-audit/1.0"
