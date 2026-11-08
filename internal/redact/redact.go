@@ -15,6 +15,7 @@ var secretKeys = map[string]bool{
 	"clientSecret":     true,
 	"password":         true,
 	"psk":              true,
+	"keyString":        true,
 }
 
 // JSON replaces secret-bearing fields.

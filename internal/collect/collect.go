@@ -181,14 +181,34 @@ func (c *collector) auditGlobal(ctx context.Context) {
 	c.dump(ctx, filepath.Join(g, "project.json"), gcpapi.Dump{Service: "cloudresourcemanager", Operation: "GetProject"})
 	c.dump(ctx, filepath.Join(g, "iam-policy.json"), gcpapi.Dump{Service: "cloudresourcemanager", Operation: "GetIamPolicy"})
 	sas := c.dump(ctx, filepath.Join(g, "iam", "service-accounts.json"), gcpapi.Dump{Service: "iam", Operation: "ListServiceAccounts"})
+	c.dumpEachIAM(ctx, sas, "accounts", filepath.Join(g, "iam"), "", "iam", "GetServiceAccountIamPolicy")
 	for _, email := range fieldList(sas, "accounts", "email") {
 		c.dump(ctx, filepath.Join(g, "iam", "keys", sanitize(email)+".json"), gcpapi.Dump{
 			Service: "iam", Operation: "ListServiceAccountKeys",
 			Input: map[string]string{"ServiceAccount": email},
 		})
 	}
+	pools := c.dump(ctx, filepath.Join(g, "iam", "workload-identity-pools.json"), gcpapi.Dump{Service: "iam", Operation: "ListWorkloadIdentityPools"})
+	for _, name := range fieldList(pools, "workloadIdentityPools", "name") {
+		c.dump(ctx, filepath.Join(g, "iam", "workload-identity-pools", resourceID(name)+"-providers.json"), gcpapi.Dump{
+			Service: "iam", Operation: "ListWorkloadIdentityPoolProviders",
+			Input: map[string]string{"Resource": name},
+		})
+	}
 	c.dump(ctx, filepath.Join(g, "serviceusage", "services.json"), gcpapi.Dump{Service: "serviceusage", Operation: "ListServices"})
-	c.dump(ctx, filepath.Join(g, "storage", "buckets.json"), gcpapi.Dump{Service: "storage", Operation: "ListBuckets"})
+	buckets := c.dump(ctx, filepath.Join(g, "storage", "buckets.json"), gcpapi.Dump{Service: "storage", Operation: "ListBuckets"})
+	bktDir := filepath.Join(g, "storage", "buckets")
+	for _, name := range fieldList(buckets, "items", "name") {
+		id := resourceID(name)
+		c.dump(ctx, filepath.Join(bktDir, id+".json"), gcpapi.Dump{
+			Service: "storage", Operation: "GetBucket",
+			Input: map[string]string{"Resource": name},
+		})
+		c.dump(ctx, filepath.Join(bktDir, id+"-iam.json"), gcpapi.Dump{
+			Service: "storage", Operation: "GetBucketIamPolicy",
+			Input: map[string]string{"Resource": name},
+		})
+	}
 	c.dump(ctx, filepath.Join(g, "compute", "networks.json"), gcpapi.Dump{Service: "compute", Operation: "ListNetworks"})
 	c.dump(ctx, filepath.Join(g, "compute", "firewalls.json"), gcpapi.Dump{Service: "compute", Operation: "ListFirewalls"})
 	c.dump(ctx, filepath.Join(g, "compute", "instances-aggregated.json"), gcpapi.Dump{Service: "compute", Operation: "AggregatedListInstances"})
@@ -196,7 +216,20 @@ func (c *collector) auditGlobal(ctx context.Context) {
 	c.dump(ctx, filepath.Join(g, "compute", "vpn-tunnels-aggregated.json"), gcpapi.Dump{Service: "compute", Operation: "AggregatedListVpnTunnels"})
 	c.dump(ctx, filepath.Join(g, "dns", "managed-zones.json"), gcpapi.Dump{Service: "dns", Operation: "ListManagedZones"})
 	c.dump(ctx, filepath.Join(g, "logging", "sinks.json"), gcpapi.Dump{Service: "logging", Operation: "ListSinks"})
-	c.dump(ctx, filepath.Join(g, "pubsub", "topics.json"), gcpapi.Dump{Service: "pubsub", Operation: "ListTopics"})
+	topics := c.dump(ctx, filepath.Join(g, "pubsub", "topics.json"), gcpapi.Dump{Service: "pubsub", Operation: "ListTopics"})
+	c.dumpEachIAM(ctx, topics, "topics", filepath.Join(g, "pubsub"), "", "pubsub", "GetTopicIamPolicy")
+	c.dump(ctx, filepath.Join(g, "apikeys", "keys.json"), gcpapi.Dump{Service: "apikeys", Operation: "ListKeys"})
+	for _, constraint := range []string{
+		"compute.vmExternalIpAccess",
+		"storage.publicAccessPrevention",
+		"sql.restrictPublicIp",
+		"iam.disableServiceAccountKeyCreation",
+	} {
+		c.dump(ctx, filepath.Join(g, "orgpolicy", constraint+".json"), gcpapi.Dump{
+			Service: "orgpolicy", Operation: "GetEffectivePolicy",
+			Input: map[string]string{"Constraint": constraint},
+		})
+	}
 }
 
 func (c *collector) auditLocations(ctx context.Context, scanned []string) {
@@ -220,20 +253,49 @@ func (c *collector) auditLocations(ctx context.Context, scanned []string) {
 
 func (c *collector) auditLocation(ctx context.Context, loc string) {
 	base := filepath.Join(c.opts.OutDir, "locations", loc)
-	d := func(rel, svc, op string) {
-		c.dump(ctx, filepath.Join(base, rel), gcpapi.Dump{Location: loc, Service: svc, Operation: op, Input: map[string]string{"Location": loc}})
+	in := map[string]string{"Location": loc}
+	d := func(rel, svc, op string) json.RawMessage {
+		return c.dump(ctx, filepath.Join(base, rel), gcpapi.Dump{Location: loc, Service: svc, Operation: op, Input: in})
 	}
 	d("sql/instances.json", "sqladmin", "ListInstances")
 	d("container/clusters.json", "container", "ListClusters")
-	d("run/services.json", "run", "ListServices")
-	d("functions/functions.json", "cloudfunctions", "ListFunctions")
-	d("kms/key-rings.json", "cloudkms", "ListKeyRings")
-	d("secretmanager/secrets.json", "secretmanager", "ListSecrets")
-	d("artifactregistry/repositories.json", "artifactregistry", "ListRepositories")
+
+	svcs := d("run/services.json", "run", "ListServices")
+	c.dumpEachIAM(ctx, svcs, "services", filepath.Join(base, "run"), loc, "run", "GetServiceIamPolicy")
+
+	fns := d("functions/functions.json", "cloudfunctions", "ListFunctions")
+	c.dumpEachIAM(ctx, fns, "functions", filepath.Join(base, "functions"), loc, "cloudfunctions", "GetFunctionIamPolicy")
+
+	rings := d("kms/key-rings.json", "cloudkms", "ListKeyRings")
+	c.dumpEachIAM(ctx, rings, "keyRings", filepath.Join(base, "kms"), loc, "cloudkms", "GetKeyRingIamPolicy")
+	for _, name := range fieldList(rings, "keyRings", "name") {
+		ringDir := filepath.Join(base, "kms", "key-rings", resourceID(name))
+		keys := c.dump(ctx, filepath.Join(ringDir, "keys.json"), gcpapi.Dump{
+			Location: loc, Service: "cloudkms", Operation: "ListCryptoKeys",
+			Input: map[string]string{"Location": loc, "Resource": name},
+		})
+		c.dumpEachIAM(ctx, keys, "cryptoKeys", ringDir, loc, "cloudkms", "GetCryptoKeyIamPolicy")
+	}
+
+	secrets := d("secretmanager/secrets.json", "secretmanager", "ListSecrets")
+	c.dumpEachIAM(ctx, secrets, "secrets", filepath.Join(base, "secretmanager"), loc, "secretmanager", "GetSecretIamPolicy")
+
+	repos := d("artifactregistry/repositories.json", "artifactregistry", "ListRepositories")
+	c.dumpEachIAM(ctx, repos, "repositories", filepath.Join(base, "artifactregistry"), loc, "artifactregistry", "GetRepositoryIamPolicy")
+
 	d("compute/subnetworks.json", "compute", "ListSubnetworks")
 	d("compute/addresses.json", "compute", "ListAddresses")
 	d("compute/forwarding-rules.json", "compute", "ListForwardingRules")
 	d("compute/routers.json", "compute", "ListRouters")
+}
+
+func (c *collector) dumpEachIAM(ctx context.Context, raw json.RawMessage, array, dir, loc, service, operation string) {
+	for _, name := range fieldList(raw, array, "name") {
+		c.dump(ctx, filepath.Join(dir, resourceID(name)+"-iam.json"), gcpapi.Dump{
+			Location: loc, Service: service, Operation: operation,
+			Input: map[string]string{"Location": loc, "Resource": name},
+		})
+	}
 }
 
 func fieldList(raw json.RawMessage, array, field string) []string {
@@ -256,6 +318,14 @@ func sanitize(s string) string {
 	s = strings.ReplaceAll(s, "/", "_")
 	s = strings.ReplaceAll(s, string(rune(0)), "_")
 	return s
+}
+
+func resourceID(name string) string {
+	name = strings.Trim(name, "/")
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	return sanitize(name)
 }
 
 func writeReports(dir string, rep *report.Report, formats []string) error {

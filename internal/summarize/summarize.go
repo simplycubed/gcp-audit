@@ -39,6 +39,12 @@ func Build(dir string) (*report.Report, error) {
 	dnsZones(dir, r)
 	saKeys(dir, r)
 	logging(dir, r)
+	storageBuckets(dir, r)
+	resourceIAM(dir, r)
+	kmsKeys(dir, r)
+	orgPolicies(dir, r)
+	apiKeys(dir, r)
+	workloadIdentity(dir, r)
 	r.Errors = errorLines(filepath.Join(dir, "errors.log"))
 	return r, nil
 }
@@ -318,6 +324,19 @@ func logging(dir string, r *report.Report) {
 			r.Add("HIGH", "Cloud Logging sink excludes audit logs",
 				s.Filter, s.Name)
 		}
+	}
+}
+
+func emptyJSON(path string) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	switch strings.TrimSpace(string(raw)) {
+	case "", "{}", "null":
+		return true
+	default:
+		return false
 	}
 }
 
